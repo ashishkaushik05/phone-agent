@@ -1,0 +1,71 @@
+CHECKPOINT D — inbound call end-to-end through the link
+Device ginkgo, hermes-core local, adb reverse (flaky this session — see notes).
+
+== what passed ==
+  D1 handoff:  call.inbound sent with real from-number; call.accept applied in ~50ms
+               when link up; 'no call.accept in 3000ms, using fallback instruction'
+               when link down -> call still runs on DEFAULT_SYSTEM_INSTRUCTION.
+  D2 auto-ans: call.answer(AUDIO_ONLY) picks up every inbound call, no human tap,
+               no acceptRingingCall() fallback needed on ginkgo.
+  D3 lifecycle: onStateChanged ACTIVE -> call.active; DISCONNECTED -> call.ended
+               reason via Protocol.mapDisconnectCause (far_party for cause=3 REMOTE).
+  D4 transcript: Gemini [input]/[output] -> coalesced 'caller'/'agent' rows, persisted
+               with seq. 20-turn call fully transcribed on the dashboard.
+  hermes-core:  director fired (needsData trigger 'schedule' -> Muse -> call.inject +
+               director row); post-call Muse review populated outcome_summary.
+               (inject does not yet reach Gemini — that is Task E1.)
+
+== best call (ginkgo-1-1788443244655): 20 transcript rows, 1 director action, far_party, summarised ==
+
+== LATENCY ISSUE (to investigate, not a Phase-D blocker) ==
+  ~9.5s from Gemini setupComplete to the agent's first spoken token; 20-30s gaps mid-call.
+  Director/tool-calls RULED OUT — they run off the audio path (phone<->Gemini WSS only).
+  Prime suspect: phone's cellular/wifi quality to generativelanguage.googleapis.com
+  (user reported 'really bad network'). Contributing, fixable on our side:
+   - audioOutQueue is unbounded: after a network stall Gemini bursts buffered audio and
+     we play all of it at realtime -> reply lands 10-20s late. Cap the queue / drop stale.
+   - audio-in and audio-out share one WSS: loss on one direction head-of-line-blocks both.
+   - AudioTrack setBufferSizeInBytes(minBuf*4) adds output latency; could tighten.
+
+== transport note ==
+  adb reverse tcp:8787 dropped ~5x this session on USB re-enumeration. Connector handled
+  it correctly every time (fallback persona, auto-reconnect 1/2/4/8/16/30s). A keepalive
+  re-asserting 'adb reverse' every 6s masked it during testing. Production uses wss:// via
+  Cloudflare tunnel — not adb reverse — so this is a dev-loop annoyance only.
+
+== raw logcat tail ==
+09-03 19:17:24.655 11493 11493 I HermesConnector: onCallAdded, initial state=2 direction=0
+09-03 19:17:24.655 11493 11493 I HermesConnector: inbound call_id=ginkgo-1-1788443244655 from=+919876543210
+09-03 19:17:24.707 11493 11576 I HermesConnector: call.accept applied (from hermes-core) for ginkgo-1-1788443244655
+09-03 19:17:24.707 11493 11493 I HermesConnector: call.answer(AUDIO_ONLY)
+09-03 19:17:24.779 11493 11493 I HermesConnector: onStateChanged -> 4 (STATE_ACTIVE=4)
+09-03 19:17:25.612 11493 11611 I HermesGemini: setupComplete — streaming downlink audio to Gemini now
+09-03 19:17:39.312 11493 11611 I HermesGemini: model turn complete
+09-03 19:17:47.516 11493 11611 I HermesGemini: model turn complete
+09-03 19:18:10.087 11493 11611 I HermesGemini: model turn complete
+09-03 19:18:31.303 11493 11611 I HermesGemini: model turn complete
+09-03 19:19:06.699 11493 11611 I HermesGemini: model turn complete
+09-03 19:19:11.309 11493 11611 I HermesGemini: model turn complete
+09-03 19:19:16.466 11493 11611 I HermesGemini: model turn complete
+09-03 19:19:18.439 11493 11493 I HermesConnector: onStateChanged -> 7 (STATE_ACTIVE=4)
+09-03 19:19:18.439 11493 11493 I HermesConnector: call.ended reason=far_party (cause=3 weInitiated=false)
+09-03 19:19:18.614 11493 11493 I HermesConnector: onCallRemoved
+09-03 19:19:55.927 11493 11493 I HermesConnector: onCallAdded, initial state=2 direction=0
+09-03 19:19:55.927 11493 11493 I HermesConnector: inbound call_id=ginkgo-1-1788443395927 from=+919876543210
+09-03 19:19:55.979 11493 11812 I HermesConnector: call.accept applied (from hermes-core) for ginkgo-1-1788443395927
+09-03 19:19:55.980 11493 11493 I HermesConnector: call.answer(AUDIO_ONLY)
+09-03 19:19:56.051 11493 11493 I HermesConnector: onStateChanged -> 4 (STATE_ACTIVE=4)
+09-03 19:19:56.944 11493 11847 I HermesGemini: setupComplete — streaming downlink audio to Gemini now
+09-03 19:20:09.867 11493 11847 I HermesGemini: model turn complete
+09-03 19:20:34.717 11493 11493 I HermesConnector: onStateChanged -> 7 (STATE_ACTIVE=4)
+09-03 19:20:34.717 11493 11493 I HermesConnector: call.ended reason=far_party (cause=3 weInitiated=false)
+09-03 19:20:34.908 11493 11493 I HermesConnector: onCallRemoved
+09-03 19:20:50.530 11493 11493 I HermesConnector: onCallAdded, initial state=2 direction=0
+09-03 19:20:50.531 11493 11493 I HermesConnector: inbound call_id=ginkgo-1-1788443450530 from=+919876543210
+09-03 19:20:53.569 11493 12081 I HermesConnector: no call.accept in 3000ms, using fallback instruction
+09-03 19:20:53.569 11493 11493 I HermesConnector: call.answer(AUDIO_ONLY)
+09-03 19:20:53.660 11493 11493 I HermesConnector: onStateChanged -> 4 (STATE_ACTIVE=4)
+09-03 19:21:13.957 11493 11493 I HermesConnector: onStateChanged -> 7 (STATE_ACTIVE=4)
+09-03 19:21:13.957 11493 11493 I HermesConnector: call.ended reason=far_party (cause=3 weInitiated=false)
+09-03 19:21:14.136 11493 11493 I HermesConnector: onCallRemoved
+09-03 19:21:43.696 11493 12674 W HermesConnector: call.accept for ginkgo-1-1788443450530 but no live ConnectorService

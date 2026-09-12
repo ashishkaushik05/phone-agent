@@ -1,0 +1,5 @@
+node_modules
+.env
+*.log
+smoke
+src/**/*.test.ts

@@ -1,0 +1,45 @@
+CHECKPOINT C — HermesLink persistent link + auto-reconnect through adb reverse
+Device: ginkgo. hermes-core: local npm start on :8787 (PGlite, director muse).
+adb reverse tcp:8787 tcp:8787. APK swapped via adb push + am force-stop (NO reboot needed).
+
+== link comes up ==
+  logcat -s HermesLink:
+    starting link: ws://localhost:8787/phone device_id=ginkgo-1
+    connecting to ws://localhost:8787/phone
+    HermesWS: handshake status: HTTP/1.1 101 Switching Protocols
+    hello sent (device_id=ginkgo-1)
+    hello_ack device_id=ginkgo-1
+    link up
+  hermes-core stdout: [server] phone-connector socket opened / [server] device registered: ginkgo-1
+  GET /health: {"ok":true,"calls":0,"devices":[{"id":"ginkgo-1",...}]}
+  LinkService: isForeground=true foregroundId=4711 types=0x200 (REMOTE_MESSAGING)
+
+== 20s heartbeat (registry.touch) ==
+  /health lastSeen advances +20000ms each poll: ...083404 -> ...103405
+
+== kill hermes-core -> backoff -> restart -> re-link ==
+09-03 18:57:17.320  9454  9471 I HermesLink: link closed code=1006 reason=connection closed without a close frame
+09-03 18:57:17.320  9454  9467 I HermesLink: link down
+09-03 18:57:17.320  9454  9467 I HermesLink: reconnect in 1000ms (attempt 1)
+09-03 18:57:18.321  9454  9467 I HermesLink: connecting to ws://localhost:8787/phone
+09-03 18:57:18.327  9454  9467 W HermesLink: connect attempt failed: WebSocket handshake failed, status line: null
+09-03 18:57:18.327  9454  9467 I HermesLink: link down
+09-03 18:57:18.327  9454  9467 I HermesLink: reconnect in 2000ms (attempt 2)
+09-03 18:57:20.328  9454  9467 I HermesLink: connecting to ws://localhost:8787/phone
+09-03 18:57:20.334  9454  9467 W HermesLink: connect attempt failed: WebSocket handshake failed, status line: null
+09-03 18:57:20.334  9454  9467 I HermesLink: link down
+09-03 18:57:20.334  9454  9467 I HermesLink: reconnect in 4000ms (attempt 3)
+09-03 18:57:24.335  9454  9467 I HermesLink: connecting to ws://localhost:8787/phone
+09-03 18:57:24.341  9454  9467 W HermesLink: connect attempt failed: WebSocket handshake failed, status line: null
+09-03 18:57:24.341  9454  9467 I HermesLink: link down
+09-03 18:57:24.341  9454  9467 I HermesLink: reconnect in 8000ms (attempt 4)
+09-03 18:57:32.342  9454  9467 I HermesLink: connecting to ws://localhost:8787/phone
+09-03 18:57:32.353  9454  9467 I HermesLink: hello sent (device_id=ginkgo-1)
+09-03 18:57:32.392  9454  9510 I HermesLink: hello_ack device_id=ginkgo-1
+09-03 18:57:32.392  9454  9510 I HermesLink: link up
+
+  after restart: [server] device registered: ginkgo-1 ; /health shows ginkgo-1 again
+
+PASS: persistent authenticated link over plaintext ws:// via adb reverse,
+      hello handshake + device registration, 20s heartbeat, exponential-backoff
+      auto-reconnect (1,2,4,8s observed).

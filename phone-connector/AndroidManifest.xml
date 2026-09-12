@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Hermes phone-connector — priv-app InCallService + persistent link to
+  hermes-core. Ported from probe-app (which proved the audio pipeline live,
+  2026-08-26/27). Telecom binds ConnectorService as a second, non-default,
+  non-UI InCallService alongside the stock Dialer — the Dialer is untouched.
+
+  android:directBootAware="true" on the <application> AND every component is
+  load-bearing: without it Telecom never binds (proven, probe-app logs).
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.hermes.connector">
+
+    <uses-sdk
+        android:minSdkVersion="26"
+        android:targetSdkVersion="34" />
+
+    <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CONTROL_INCALL_EXPERIENCE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.MODIFY_PHONE_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+
+    <application
+        android:label="Hermes Connector"
+        android:hasCode="true"
+        android:persistent="false"
+        android:directBootAware="true">
+
+        <!-- Capture VOICE_DOWNLINK -> Gemini Live -> TYPE_TELEPHONY uplink.
+             Bound by Telecom as a non-UI InCallService alongside the Dialer. -->
+        <service
+            android:name="com.hermes.connector.ConnectorService"
+            android:permission="android.permission.BIND_INCALL_SERVICE"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+
+        <!-- Foreground service hosting the persistent HermesLink to hermes-core.
+             Real impl in Task C3. -->
+        <service
+            android:name="com.hermes.connector.LinkService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging"
+            android:directBootAware="true" />
+
+        <!-- Restart the link after a reboot without anyone opening the app.
+             Real impl in Task C3. -->
+        <receiver
+            android:name="com.hermes.connector.BootReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Dev-only outbound-call trigger over adb (action DEV_OUTBOUND_CALL,
+             string extra "to"). Real impl in Task F1. -->
+        <receiver
+            android:name="com.hermes.connector.DevOutboundReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="com.hermes.connector.DEV_OUTBOUND_CALL" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Standalone Gemini Live smoke test (action TEST_GEMINI, string extra
+             "text") — no telephony permission needed, triggered over adb. -->
+        <receiver
+            android:name="com.hermes.connector.GeminiSmokeTestReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="com.hermes.connector.TEST_GEMINI" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Inbound SMS observer. Non-default SMS app: SMS_RECEIVED still reaches
+             any RECEIVE_SMS holder. Relays to hermes-core as sms.inbound. -->
+        <receiver
+            android:name="com.hermes.connector.SmsReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

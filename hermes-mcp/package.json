@@ -1,0 +1,23 @@
+{
+  "name": "hermes-mcp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "MCP tool-call adapter over hermes-core's REST API — the harness-facing layer.",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "dev": "tsx watch src/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "tsx": "^4.23.13",
+    "zod": "^4.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^5.9.3",
+    "vitest": "^2.1.9"
+  }
+}

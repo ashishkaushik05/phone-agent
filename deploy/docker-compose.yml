@@ -1,0 +1,79 @@
+# VPS deployment: hermes-core + hermes-mcp + a dedicated Postgres, all in one compose
+# project. Deliberately isolated from every other stack on the box (own network, own
+# volumes, own Postgres) — see hermes-mcp/README.md and
+# the prod-VPS deploy notes in this directory's README.
+#
+# All three app ports are bound to 127.0.0.1 only — reachable solely via the Cloudflare
+# Tunnel (cloudflared on the host talks to localhost:8787/8788/8789), never directly from
+# the public internet. Docker is known to install iptables rules that can bypass ufw, so
+# binding to loopback (not 0.0.0.0) is the actual guarantee here, not the firewall.
+# twilio-connector's :8789 needs its own cloudflared route added on the host (its public
+# hostname is what TWILIO_PUBLIC_BASE_URL and the Twilio console's Voice webhook point at)
+# — not something this compose file can do on its own.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hermes
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: hermes
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hermes"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  hermes-core:
+    build: ../hermes-core
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - whatsapp-auth:/app/data/whatsapp-auth
+    environment:
+      HERMES_PORT: "8787"
+      PHONE_AGENT_CONTROL_TOKEN: "${PHONE_AGENT_CONTROL_TOKEN}"
+      DATABASE_URL: "postgres://hermes:${POSTGRES_PASSWORD}@postgres:5432/hermes"
+      MODEL_API_KEY: "${MODEL_API_KEY}"
+      DIRECTOR_MODEL: "${DIRECTOR_MODEL}"
+      OWNER_WHATSAPP: "${OWNER_WHATSAPP}"
+
+  hermes-mcp:
+    build: ../hermes-mcp
+    restart: unless-stopped
+    depends_on:
+      - hermes-core
+    ports:
+      - "127.0.0.1:8788:8788"
+    environment:
+      HERMES_MCP_PORT: "8788"
+      HERMES_CORE_URL: "http://hermes-core:8787"
+      PHONE_AGENT_CONTROL_TOKEN: "${PHONE_AGENT_CONTROL_TOKEN}"
+
+  twilio-connector:
+    build: ../twilio-connector
+    restart: unless-stopped
+    depends_on:
+      - hermes-core
+    ports:
+      - "127.0.0.1:8789:8789"
+    environment:
+      TWILIO_CONNECTOR_PORT: "8789"
+      HERMES_WS_URL: "ws://hermes-core:8787/phone"
+      PHONE_AGENT_CONTROL_TOKEN: "${PHONE_AGENT_CONTROL_TOKEN}"
+      DEVICE_ID: "twilio-main"
+      TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID}"
+      TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN}"
+      TWILIO_NUMBER: "${TWILIO_NUMBER}"
+      PUBLIC_BASE_URL: "${TWILIO_PUBLIC_BASE_URL}"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+
+volumes:
+  postgres-data:
+  whatsapp-auth:

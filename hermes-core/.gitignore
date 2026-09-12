@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+muse_key
+*_key
+# WhatsApp (Baileys) session — see DEPLOY.md §3a.
+# Real credentials once paired; never committed. Mount as a volume in prod.
+data/whatsapp-auth/

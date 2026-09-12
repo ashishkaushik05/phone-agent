@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Priv-app allowlist for the Hermes phone-connector. Must live on the same
+  partition as the APK (/product), per
+  https://source.android.com/docs/core/permissions/perms-allowlist
+
+  Deploy path: /product/etc/permissions/privapp-permissions-hermes.xml
+  (see phone-connector/DEPLOY.md)
+-->
+<permissions>
+    <privapp-permissions package="com.hermes.connector">
+        <permission name="android.permission.CAPTURE_AUDIO_OUTPUT"/>
+        <permission name="android.permission.CONTROL_INCALL_EXPERIENCE"/>
+        <permission name="android.permission.MODIFY_PHONE_STATE"/>
+    </privapp-permissions>
+</permissions>

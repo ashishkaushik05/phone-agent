@@ -1,0 +1,22 @@
+services:
+  hermes-core:
+    build: .
+    image: hermes-core
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      # WhatsApp (Baileys) session — see DEPLOY.md §3a. Survives redeploys; without this a
+      # redeploy loses pairing and needs the QR scanned again.
+      - whatsapp-auth:/app/data/whatsapp-auth
+    environment:
+      HERMES_PORT: "8787"
+      PHONE_AGENT_CONTROL_TOKEN: "${PHONE_AGENT_CONTROL_TOKEN}"
+      DATABASE_URL: "${DATABASE_URL}"           # existing Supabase Postgres, ?options=--search_path%3Dhermes optional
+      REDIS_URL: "${REDIS_URL}"                 # existing VPS Redis
+      MODEL_API_KEY: "${MODEL_API_KEY}"         # Meta Model API (Muse Spark)
+      DIRECTOR_MODEL: "muse-spark-1.2"
+      gemini_key: "${gemini_key}"               # only used if a future component needs it server-side
+
+volumes:
+  whatsapp-auth:
